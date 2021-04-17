@@ -1,5 +1,16 @@
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js").then(reg => {
+      console.log("We found your service worker file!", reg);
+    });
+  });
+}
+
+
+
 let transactions = [];
 let myChart;
+
 
 fetch("/api/transaction")
   .then(response => {
@@ -142,6 +153,67 @@ function sendTransaction(isAdding) {
     nameEl.value = "";
     amountEl.value = "";
   });
+};
+
+
+//------
+const request = window.indexedDB.open("offlineTrans", 1);
+let db;
+
+request.onupgradeneeded = ({ target }) => {
+  db = target.result;
+  db.createObjectStore("offlineTrans", { autoIncrement: true });
+};
+
+request.onsuccess = ({ target }) => {
+  db = target.result;
+};
+
+request.onerror = (e) => {
+  console.log("Woops! " + e.target.errorCode);
+};
+
+request.onsuccess = ({ target }) => {
+  db = target.result;
+  if (navigator.online) {
+    uploadToDb()
+  }
+}; 
+
+function saveRecord(record) {
+    const transaction = db.transaction(["offlineTrans"], "readwrite");
+    const store = transaction.objectStore("offlineTrans");
+    console.log(store);
+    store.add(record);
+  
+};
+
+
+function uploadToDb() {
+
+  //get all on store
+  const transaction = db.transaction(["offlineTrans"], "readwrite");
+  const store = transaction.objectStore("offlineTrans");
+  const allRecords = store.getAll("offlineTrans");
+
+  allRecords.onsuccess = () => {
+    if (allRecords.result.length > 0) {
+      fetch("/api/transaction/bulk", {
+        method: "POST",
+        body: JSON.stringify(allRecords),
+        headers: {
+          Accept: "application/json, text/plain, */*",
+          "Content-Type": "application/json"
+        }
+      })
+      .then(response => {    
+        return response.json();
+      })
+      .catch(err => console.log(err));
+    
+    }
+  }
+
 }
 
 document.querySelector("#add-btn").onclick = function() {
